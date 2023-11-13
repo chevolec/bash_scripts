@@ -13,11 +13,11 @@ cd "$CARPETA_ORIGEN" || exit
 for archivo_rar in *.rar; do
     # Extrae el nombre de la serie de la carpeta interna del archivo rar
     nombre_serie=$(unrar lb "$archivo_rar" | head -n 1)
-    echo "$archivo_rar"
-    echo $nombre_serie
     
     # Itera sobre los archivos dentro del rar
+    echo 'unrar e "$archivo_rar" "$nombre_serie"/*.rar'
     unrar e "$archivo_rar" "$nombre_serie"/*.rar
+
     for libro in "$nombre_serie"/*.rar; do
         # Extrae el número del ejemplar del nombre del archivo
         numero_ejemplar=$(echo "$libro" | grep -oP '\d+(?=.rar)')
