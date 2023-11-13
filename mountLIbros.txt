@@ -1,0 +1,1 @@
+sudo mount -t cifs -o nobrl,username=${USER},password=${PASSWORD},uid=$(id -u),gid=$(id -g),forceuid,forcegid, //192.168.68.121/libros/ /mnt/libros
