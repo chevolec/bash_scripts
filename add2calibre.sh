@@ -1,35 +1,35 @@
 #!/bin/bash
 
 # Ruta de la carpeta que contiene los archivos rar
-CARPETA_ORIGEN="/mnt/libros/temp2"
+ruta_carpeta="/mnt/libros/temp/"
 
-# Ruta de la biblioteca Calibre
-CARPETA_CALIBRE="/mnt/libros/books/CalibreLibrary/metadata.db"
+# Cambiar al directorio que contiene los archivos rar
+cd "$ruta_carpeta"
 
-# Cambia al directorio de la carpeta de origen
-cd "$CARPETA_ORIGEN" || exit
-
-# Itera sobre todos los archivos rar en la carpeta
+# Iterar sobre los archivos rar en la carpeta
 for archivo_rar in *.rar; do
-    # Extrae el nombre de la serie de la carpeta interna del archivo rar
-    nombre_serie=$(unrar lb "$archivo_rar" | head -n 1)
-    
-    # Itera sobre los archivos dentro del rar
-    echo 'unrar e "$archivo_rar" "$nombre_serie"/*.rar'
-    unrar e "$archivo_rar" "$nombre_serie"/*.rar
+    # Obtener el nombre de la serie (nombre de la carpeta sin espacios)
+    nombre_serie=$(unrar lb "$archivo_rar" | head -n 1 | sed 's/\/.*//g')
+    nombre_archivo=$(unrar lb "$archivo_rar" | head -n 1 | sed 's/\// - /g' )
 
-    for libro in "$nombre_serie"/*.rar; do
-        # Extrae el número del ejemplar del nombre del archivo
-        numero_ejemplar=$(echo "$libro" | grep -oP '\d+(?=.rar)')
+    # Crear la carpeta para extraer los archivos rar
+    carpeta_destino="/mnt/libros/temp3/$nombre_serie"
+    mkdir -p "$carpeta_destino"
+
+    # Extraer los archivos rar
+    unrar e -o+ "$archivo_rar" "$carpeta_destino"
+
+    # Iterar sobre los archivos extraídos
+    for archivo_libro in "$carpeta_destino"/*; do
+        # Obtener el número del ejemplar (nombre del archivo sin extensión)
+        numero_ejemplar=$(basename "$archivo_libro" | cut -f1 -d'.')
+        # Crear el título del libro concatenando el nombre de la serie y el número del ejemplar
+        titulo_libro="${nombre_serie} ${numero_ejemplar}"
         
-        # Construye el título del libro concatenando nombre de la serie y número del ejemplar
-        titulo_libro="${nombre_serie}_Ejemplar_${numero_ejemplar}"
-        
-        # Agrega el libro a la biblioteca de Calibre
-        calibredb add --library-path="$CARPETA_CALIBRE" "$libro" --title="$titulo_libro" --series="$nombre_serie"
-        
-        # Elimina el archivo extraído
-        rm "$libro"
+        echo $titulo_libro
+        # Agregar el libro a Calibre
+        #calibredb add --title "$titulo_libro" --authors "Nombre del Autor" "$archivo_libro"
+        calibredb add --title "$titulo_libro" --series "$nombre_serie" --series-index "$numero_ejemplar" "$archivo_libro"
     done
 done
 
