@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Ruta de la carpeta que contiene los archivos rar
-ruta_carpeta="/mnt/libros/temp/"
+ruta_carpeta="/mnt/libros/SubirCalibre/origen/"
 
 # Cambiar al directorio que contiene los archivos rar
 cd "$ruta_carpeta"
@@ -13,7 +13,7 @@ for archivo_rar in *.rar; do
     nombre_archivo=$(unrar lb "$archivo_rar" | head -n 1 | sed 's/\// - /g' )
 
     # Crear la carpeta para extraer los archivos rar
-    carpeta_destino="/mnt/libros/temp3/$nombre_serie"
+    carpeta_destino="/mnt/libros/SubirCalibre/destino/$nombre_serie"
     mkdir -p "$carpeta_destino"
 
     # Extraer los archivos rar
@@ -29,7 +29,7 @@ for archivo_rar in *.rar; do
         echo $titulo_libro
         # Agregar el libro a Calibre
         #calibredb add --title "$titulo_libro" --authors "Nombre del Autor" "$archivo_libro"
-        calibredb add --title "$titulo_libro" --series "$nombre_serie" --tag "Historietas, Classic Pdf"  "$archivo_libro"
+        calibredb add --title "$titulo_libro" --series "$nombre_serie" --series-index "${numero_ejemplar}" --tag "Historietas, Retro Pdf"  "$archivo_libro"
     done
 done
 
