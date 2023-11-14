@@ -17,7 +17,7 @@ for archivo_rar in *.rar; do
     mkdir -p "$carpeta_destino"
 
     # Extraer los archivos rar
-    unrar e -o+ "$archivo_rar" "$carpeta_destino"
+    unrar e -o- "$archivo_rar" "$carpeta_destino"
 
     # Iterar sobre los archivos extraídos
     for archivo_libro in "$carpeta_destino"/*; do
