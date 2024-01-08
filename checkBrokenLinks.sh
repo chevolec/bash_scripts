@@ -15,3 +15,7 @@ do
         sed -i "s|^.*$XX.*$||g" $BOOKMARKS
     fi
 done < $SORTED_LIST
+
+# command to test out
+# wget --max-redirect=0 --spider burningsmell.org/asdf burningsmell.org/index.html burningsmell.org/index.php -nv -O /dev/null
+
