@@ -1,0 +1,150 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage:
+  gpsync [project]
+
+Examples:
+  gpsync
+  gpsync coca
+EOF
+}
+
+error() {
+  echo "[ERROR] $*" >&2
+}
+
+info() {
+  echo "[INFO] $*"
+}
+
+# Map of known project keys -> Windows repo paths
+declare -A WINDOWS_REPOS=(
+#  [coca]='C:\Users\TU_USUARIO\proyecto\coca'
+  [Skoll]='C:\development\02 FEMA\Skoll'
+  [FoxSync]='C:\development\FoxSync'
+  [Skoll_Windows]='C:\development\Skoll_Windows'
+  [Transfer]='C:\development\Transfer'
+
+)
+
+# Optional aliases:
+# repo name from remote -> project key
+declare -A REMOTE_NAME_TO_PROJECT=(
+  [coca]='coca'
+  [coca-api]='coca'
+  [pepsi]='pepsi'
+  [pepsi-service]='pepsi'
+)
+
+get_git_remote_repo_name() {
+  local remote_url repo_name
+
+  remote_url="$(git remote get-url origin 2>/dev/null || true)"
+
+  if [[ -z "$remote_url" ]]; then
+    return 1
+  fi
+
+  # Supports:
+  #   git@github.com:org/repo.git
+  #   https://github.com/org/repo.git
+  #   https://github.com/org/repo
+  repo_name="${remote_url##*/}"
+  repo_name="${repo_name%.git}"
+
+  if [[ -z "$repo_name" ]]; then
+    return 1
+  fi
+
+  printf '%s\n' "$repo_name"
+}
+
+resolve_project() {
+  local input_project="${1:-}"
+  local remote_repo_name
+
+  # 1) Explicit parameter wins
+  if [[ -n "$input_project" ]]; then
+    printf '%s\n' "$input_project"
+    return 0
+  fi
+
+  # 2) Try Git remote repo name
+  if remote_repo_name="$(get_git_remote_repo_name)"; then
+    info "Detected remote repository name: $remote_repo_name" >&2
+
+    if [[ -n "${WINDOWS_REPOS[$remote_repo_name]:-}" ]]; then
+      printf '%s\n' "$remote_repo_name"
+      return 0
+    fi
+
+    if [[ -n "${REMOTE_NAME_TO_PROJECT[$remote_repo_name]:-}" ]]; then
+      printf '%s\n' "${REMOTE_NAME_TO_PROJECT[$remote_repo_name]}"
+      return 0
+    fi
+  fi
+
+  return 1
+}
+
+if [[ $# -gt 1 ]]; then
+  usage
+  exit 1
+fi
+
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  error "Current directory is not inside a Git repository."
+  exit 1
+fi
+
+WSL_REPO_ROOT="$(git rev-parse --show-toplevel)"
+WSL_REPO_NAME="$(basename "$WSL_REPO_ROOT")"
+
+PROJECT="$(resolve_project "${1:-}")" || {
+  error "Could not resolve project automatically."
+  info "Current WSL repo name: $WSL_REPO_NAME" >&2
+  info "Git remote repo name could not be matched to a configured project." >&2
+  echo
+  echo "Available projects:"
+  for key in "${!WINDOWS_REPOS[@]}"; do
+    echo "  - $key"
+  done
+  echo
+  echo "Try: gpsync <project>"
+  exit 1
+}
+
+WINDOWS_REPO="${WINDOWS_REPOS[$PROJECT]:-}"
+
+if [[ -z "$WINDOWS_REPO" ]]; then
+  error "Resolved project '$PROJECT' is not configured."
+  exit 1
+fi
+
+info "WSL repo root: $WSL_REPO_ROOT"
+info "WSL repo name: $WSL_REPO_NAME"
+info "Resolved project: $PROJECT"
+info "Windows repo path: $WINDOWS_REPO"
+
+info "Pushing current branch from WSL..."
+git push
+
+info "Checking Windows repo status..."
+#powershell.exe -NoProfile -Command "
+/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "
+\$ErrorActionPreference = 'Stop'
+Set-Location '$WINDOWS_REPO'
+
+\$status = git status --porcelain
+if (\$status) {
+  Write-Host '[ERROR] Windows repo has uncommitted changes. Pull aborted.'
+  exit 1
+}
+
+git pull --ff-only
+"
+
+info "Sync completed successfully."
