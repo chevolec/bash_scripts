@@ -4,15 +4,11 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage:
-  gpsync [project] [options]
+  gpsync [project]
 
 Examples:
   gpsync
   gpsync coca
-  gpsync telemetria --no-git
-
-Options:
-  --no-git    Skip git push/pull with Windows repo (only sync folders)
 EOF
 }
 
@@ -24,51 +20,14 @@ info() {
   echo "[INFO] $*"
 }
 
-sync_with_unison() {
-  local wsl_path="$1"
-  local windows_path="$2"
-  local project="$3"
-
-  if [[ ! -d "$wsl_path" ]]; then
-    info "Sync folder not configured or does not exist: $wsl_path"
-    return 0
-  fi
-
-  if [[ ! -d "$windows_path" ]]; then
-    info "Windows sync folder does not exist: $windows_path"
-    return 0
-  fi
-
-  info "Syncing local folder with Windows (Unison)..."
-  info "  WSL: $wsl_path"
-  info "  Windows: $windows_path"
-
-  if command -v unison &> /dev/null; then
-    unison "$wsl_path" "$windows_path"  -fat -auto -batch -prefer newer
-  else
-    error "Unison not installed. Install with: sudo apt install unison"
-    info "Skipping folder sync."
-  fi
-}
-
 # Map of known project keys -> Windows repo paths
 declare -A WINDOWS_REPOS=(
 #  [coca]='C:\Users\TU_USUARIO\proyecto\coca'
-  # [Skoll]='C:\development\02 FEMA\Skoll'
-  # [FoxSync]='C:\development\FoxSync'
-  # [Skoll_Windows]='C:\development\Skoll_Windows'
-  # [Transfer]='C:\development\Transfer'
-  [telemetria]='C:\development\PlayGround\telemetria'
-)
+  [Skoll]='C:\development\02 FEMA\Skoll'
+  [FoxSync]='C:\development\FoxSync'
+  [Skoll_Windows]='C:\development\Skoll_Windows'
+  [Transfer]='C:\development\Transfer'
 
-declare -A SYNC_FOLDERS=(
-  # [Skoll]='/home/chevolec/Skoll/investigaciones'
-  # [FoxSync]='/home/chevolec/FoxSync/analisis'
-  [telemetria]='/home/chevolec/Development/telemetria/configuracion'
-)
-
-declare -A SYNC_WINDOWS_FOLDERS=(
-  [telemetria]='/mnt/c/Users/mauricio.magallanes/OneDrive/Proyectos/Eisenberg/Telemetria/configuracion'
 )
 
 # Optional aliases:
@@ -107,21 +66,13 @@ resolve_project() {
   local input_project="${1:-}"
   local remote_repo_name
 
-  input_project="${input_project% --no-git}"
-
   # 1) Explicit parameter wins
   if [[ -n "$input_project" ]]; then
     printf '%s\n' "$input_project"
     return 0
   fi
 
-  # 2) If --no-git, use current directory name
-  if [[ $NO_GIT -eq 1 ]]; then
-    printf '%s\n' "$WSL_REPO_NAME"
-    return 0
-  fi
-
-  # 3) Try Git remote repo name
+  # 2) Try Git remote repo name
   if remote_repo_name="$(get_git_remote_repo_name)"; then
     info "Detected remote repository name: $remote_repo_name" >&2
 
@@ -139,35 +90,26 @@ resolve_project() {
   return 1
 }
 
-if [[ $# -gt 2 ]]; then
+if [[ $# -gt 1 ]]; then
   usage
   exit 1
 fi
 
-NO_GIT=0
-if [[ "${2:-}" == "--no-git" ]]; then
-  NO_GIT=1
+if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+  error "Current directory is not inside a Git repository."
+  exit 1
 fi
 
-if [[ $NO_GIT -eq 0 ]]; then
-  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
-    error "Current directory is not inside a Git repository."
-    exit 1
-  fi
-
-  WSL_REPO_ROOT="$(git rev-parse --show-toplevel)"
-  WSL_REPO_NAME="$(basename "$WSL_REPO_ROOT")"
-else
-  WSL_REPO_ROOT="$(pwd)"
-  WSL_REPO_NAME="$(basename "$WSL_REPO_ROOT")"
-fi
+WSL_REPO_ROOT="$(git rev-parse --show-toplevel)"
+WSL_REPO_NAME="$(basename "$WSL_REPO_ROOT")"
 
 PROJECT="$(resolve_project "${1:-}")" || {
   error "Could not resolve project automatically."
-  info "Current WSL directory: $WSL_REPO_NAME" >&2
+  info "Current WSL repo name: $WSL_REPO_NAME" >&2
+  info "Git remote repo name could not be matched to a configured project." >&2
   echo
   echo "Available projects:"
-  for key in "${!WINDOWS_REPOS[@]}" "${!SYNC_FOLDERS[@]}"; do
+  for key in "${!WINDOWS_REPOS[@]}"; do
     echo "  - $key"
   done
   echo
@@ -177,51 +119,32 @@ PROJECT="$(resolve_project "${1:-}")" || {
 
 WINDOWS_REPO="${WINDOWS_REPOS[$PROJECT]:-}"
 
-if [[ -z "$WINDOWS_REPO" ]] && [[ -z "${SYNC_FOLDERS[$PROJECT]:-}" ]]; then
-  error "Project '$PROJECT' is not configured."
+if [[ -z "$WINDOWS_REPO" ]]; then
+  error "Resolved project '$PROJECT' is not configured."
   exit 1
 fi
 
-if [[ -z "$WINDOWS_REPO" ]]; then
-  info "WSL directory: $WSL_REPO_ROOT"
-else
-  info "WSL repo root: $WSL_REPO_ROOT"
-fi
+info "WSL repo root: $WSL_REPO_ROOT"
 info "WSL repo name: $WSL_REPO_NAME"
 info "Resolved project: $PROJECT"
-if [[ -n "$WINDOWS_REPO" ]]; then
-  info "Windows repo path: $WINDOWS_REPO"
-fi
+info "Windows repo path: $WINDOWS_REPO"
 
-if [[ $NO_GIT -eq 0 ]]; then
-  info "Pushing current branch from WSL..."
-  git push
+info "Pushing current branch from WSL..."
+git push
 
-  info "Checking Windows repo status..."
-  #powershell.exe -NoProfile -Command "
-  /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "
-  \$ErrorActionPreference = 'Stop'
-  Set-Location '$WINDOWS_REPO'
+info "Checking Windows repo status..."
+#powershell.exe -NoProfile -Command "
+/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -Command "
+\$ErrorActionPreference = 'Stop'
+Set-Location '$WINDOWS_REPO'
 
-  \$status = git status --porcelain
-  if (\$status) {
-    Write-Host '[ERROR] Windows repo has uncommitted changes. Pull aborted.'
-    exit 1
-  }
+\$status = git status --porcelain
+if (\$status) {
+  Write-Host '[ERROR] Windows repo has uncommitted changes. Pull aborted.'
+  exit 1
+}
 
-  git pull --ff-only
-  "
-else
-  info "Skipping git sync (--no-git flag)"
-fi
-
-SYNC_PATH="${SYNC_FOLDERS[$PROJECT]:-}"
-if [[ -n "$SYNC_PATH" ]]; then
-  WINDOWS_SYNC_PATH="${SYNC_WINDOWS_FOLDERS[$PROJECT]:-}"
-  if [[ -z "$WINDOWS_SYNC_PATH" ]]; then
-    WINDOWS_SYNC_PATH="$WINDOWS_REPO/${SYNC_PATH##*/}"
-  fi
-  sync_with_unison "$SYNC_PATH" "$WINDOWS_SYNC_PATH" "$PROJECT"
-fi
+git pull --ff-only
+"
 
 info "Sync completed successfully."
