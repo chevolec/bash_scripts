@@ -1,0 +1,13 @@
+#!/bin/bash
+
+if [ -z "$1" ]; then
+    echo "Uso: $0 \"C:\\Users\\luis.lopez\""
+    exit 1
+fi
+
+win_path="$1"
+
+linux_path="${win_path//\\//}"
+linux_path="${linux_path/#C:/\/mnt\/c}"
+
+echo "$linux_path"
